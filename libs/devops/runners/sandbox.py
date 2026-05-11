@@ -184,7 +184,7 @@ class SandboxRunner:
     # -- internal ----------------------------------------------------------
 
     def _create_sandbox(self) -> Path:
-        """Copy the project into a temporary directory."""
+        """Copy the project into a temporary directory and install deps."""
         sandbox = Path(tempfile.mkdtemp(prefix="sandbox_"))
         shutil.copytree(
             self.project_root,
@@ -193,7 +193,19 @@ class SandboxRunner:
                 ".git", "__pycache__", "*.pyc", ".venv", "node_modules",
             ),
         )
-        return sandbox / "project"
+        project_dir = sandbox / "project"
+        # Install project dependencies in sandbox
+        try:
+            subprocess.run(
+                ["uv", "sync", "--frozen"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd=project_dir,
+            )
+        except Exception as e:
+            logger.warning("Failed to install deps in sandbox: %s", e)
+        return project_dir
 
     def _apply_patch(self, sandbox_dir: Path, patch: Patch) -> None:
         """Write patched files into the sandbox."""

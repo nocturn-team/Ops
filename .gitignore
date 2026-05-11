@@ -20,6 +20,9 @@ wheels/
 *.swo
 *~
 
+# Runtime state
+.devops_state/
+
 # OS
 .DS_Store
 Thumbs.db
