@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Agent — Dual-Loop Pipeline Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 5px rgba(34,211,238,0.3); } 50% { box-shadow: 0 0 20px rgba(34,211,238,0.6); } }
+        .stage-running { animation: pulse-glow 1.5s ease-in-out infinite; }
+        .scroll-auto { scroll-behavior: smooth; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-mono">
+
+<div x-data="pipeline()" x-init="init()" x-cloak>
+
+    <!-- Header -->
+    <header class="bg-gray-900 border-b border-gray-800 px-6 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center text-black font-bold text-sm">DA</div>
+                <div>
+                    <h1 class="text-lg font-bold text-cyan-400">DevOps Agent</h1>
+                    <p class="text-xs text-gray-500">Dual-Loop Convergence Architecture</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-xs text-gray-500" x-text="'Runs: ' + Object.keys(runs).length"></span>
+                <span class="w-2 h-2 rounded-full" :class="wsConnected ? 'bg-green-400' : 'bg-red-400'"></span>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-6 py-4">
+
+        <!-- Trigger Panel -->
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-4">
+            <div class="flex items-center gap-4">
+                <div class="flex-1">
+                    <input x-model="bugInput" @keydown.enter="triggerPipeline()"
+                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-cyan-500 placeholder-gray-500"
+                           placeholder="输入 Bug 描述 / 错误日志 / Alert payload...">
+                </div>
+                <button @click="triggerPipeline()" :disabled="running"
+                        class="bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-700 disabled:text-gray-500 px-6 py-2 rounded text-sm font-medium transition-colors whitespace-nowrap">
+                    <span x-show="!running">触发管道</span>
+                    <span x-show="running">运行中...</span>
+                </button>
+            </div>
+            <p class="text-xs text-gray-600 mt-2">模拟模式 — 无需 API Key，演示完整 9 阶段管道流程</p>
+        </div>
+
+        <!-- Main Layout: Pipeline + Activity -->
+        <div class="grid grid-cols-12 gap-4">
+
+            <!-- Left: Pipeline Stages -->
+            <div class="col-span-4">
+                <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+                    <h2 class="text-sm font-semibold text-gray-400 mb-3">Pipeline Stages</h2>
+
+                    <div class="space-y-1">
+                        <template x-for="stage in stages" :key="stage.id">
+                            <div class="flex items-center gap-2 px-3 py-2 rounded transition-all"
+                                 :class="{
+                                     'bg-gray-800': stageStatus(stage.id) === 'pending',
+                                     'bg-cyan-950 border border-cyan-700 stage-running': stageStatus(stage.id) === 'running',
+                                     'bg-green-950 border border-green-800': stageStatus(stage.id) === 'completed',
+                                     'bg-red-950 border border-red-800': stageStatus(stage.id) === 'failed',
+                                 }">
+                                <!-- Status icon -->
+                                <div class="w-6 h-6 flex items-center justify-center text-xs rounded-full flex-shrink-0"
+                                     :class="{
+                                         'bg-gray-700 text-gray-500': stageStatus(stage.id) === 'pending',
+                                         'bg-cyan-700 text-cyan-200': stageStatus(stage.id) === 'running',
+                                         'bg-green-700 text-green-200': stageStatus(stage.id) === 'completed',
+                                         'bg-red-700 text-red-200': stageStatus(stage.id) === 'failed',
+                                     }">
+                                    <span x-show="stageStatus(stage.id) === 'pending'" x-text="stage.num"></span>
+                                    <span x-show="stageStatus(stage.id) === 'running'">⟳</span>
+                                    <span x-show="stageStatus(stage.id) === 'completed'">✓</span>
+                                    <span x-show="stageStatus(stage.id) === 'failed'">✕</span>
+                                </div>
+                                <!-- Stage info -->
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-xs font-medium truncate" x-text="stage.name"></div>
+                                    <div class="text-[10px] text-gray-500" x-text="stage.desc"></div>
+                                </div>
+                                <!-- Loop badge -->
+                                <div x-show="stage.loop" class="text-[9px] px-1.5 py-0.5 rounded"
+                                     :class="stage.loop === 'inner' ? 'bg-purple-900 text-purple-300' : 'bg-orange-900 text-orange-300'"
+                                     x-text="stage.loop === 'inner' ? 'Correctness' : 'Availability'">
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Inner Loop Detail -->
+                    <div x-show="innerLoopData.length > 0" class="mt-4 border-t border-gray-800 pt-3">
+                        <h3 class="text-xs text-gray-500 mb-2">Inner Loop Iterations</h3>
+                        <template x-for="iter in innerLoopData" :key="iter.iteration">
+                            <div class="flex items-center gap-2 text-xs mb-1">
+                                <span class="text-gray-500" x-text="'#' + iter.iteration"></span>
+                                <span :class="iter.tests_passed ? 'text-green-400' : 'text-red-400'"
+                                      x-text="iter.tests_passed ? '✓ Tests' : '✕ Tests'"></span>
+                                <span class="text-gray-400" x-text="'Mutation: ' + (iter.mutation_score * 100).toFixed(0) + '%'"></span>
+                                <div class="flex-1 bg-gray-800 rounded-full h-1.5">
+                                    <div class="h-1.5 rounded-full transition-all"
+                                         :class="iter.mutation_score >= 0.8 ? 'bg-green-500' : 'bg-yellow-500'"
+                                         :style="'width:' + (iter.mutation_score * 100) + '%'"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Canary Progress -->
+                    <div x-show="canaryData.length > 0" class="mt-4 border-t border-gray-800 pt-3">
+                        <h3 class="text-xs text-gray-500 mb-2">Canary Rollout</h3>
+                        <div class="flex gap-1">
+                            <template x-for="c in canaryData" :key="c.stage">
+                                <div class="flex-1 text-center">
+                                    <div class="h-2 rounded-full bg-green-500 mb-1"></div>
+                                    <span class="text-[10px] text-gray-400" x-text="c.stage"></span>
+                                </div>
+                            </template>
+                            <template x-for="i in (4 - canaryData.length)" :key="'empty-'+i">
+                                <div class="flex-1 text-center">
+                                    <div class="h-2 rounded-full bg-gray-800 mb-1"></div>
+                                    <span class="text-[10px] text-gray-600">—</span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Circuit Breakers -->
+                <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 mt-4">
+                    <h2 class="text-sm font-semibold text-gray-400 mb-3">Circuit Breakers</h2>
+                    <div class="space-y-1.5">
+                        <template x-for="(b, node) in breakers" :key="node">
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="w-2 h-2 rounded-full flex-shrink-0"
+                                      :class="b.state === 'open' ? 'bg-red-400' : 'bg-green-400'"></span>
+                                <span class="flex-1 text-gray-400 truncate" x-text="node"></span>
+                                <span class="text-gray-500" x-text="b.failures + '/' + b.max_failures"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Agent Activity Feed -->
+            <div class="col-span-8">
+                <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col" style="height: calc(100vh - 200px);">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm font-semibold text-gray-400">Agent Activity</h2>
+                        <button @click="activityLog = []" class="text-xs text-gray-600 hover:text-gray-400">清空</button>
+                    </div>
+
+                    <div x-ref="activityFeed" class="flex-1 overflow-y-auto space-y-1 scroll-auto pr-2">
+                        <template x-for="(item, idx) in activityLog" :key="idx">
+                            <div class="fade-in">
+                                <!-- Stage Update -->
+                                <div x-show="item.type === 'stage_update'" class="flex items-start gap-2 px-2 py-1.5 rounded"
+                                     :class="item.status === 'completed' ? 'bg-green-950/30' : item.status === 'running' ? 'bg-cyan-950/30' : 'bg-gray-800/50'">
+                                    <span class="text-[10px] text-gray-600 w-14 flex-shrink-0" x-text="item.timestamp"></span>
+                                    <span class="text-xs px-1.5 py-0.5 rounded font-medium"
+                                          :class="item.status === 'completed' ? 'bg-green-800 text-green-200' : item.status === 'running' ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-700 text-gray-300'"
+                                          x-text="item.status === 'completed' ? '✓ ' + item.stage : item.status === 'running' ? '▶ ' + item.stage : item.stage">
+                                    </span>
+                                    <span x-show="item.data && item.data.title" class="text-xs text-gray-400 truncate" x-text="item.data?.title || ''"></span>
+                                </div>
+
+                                <!-- Agent Activity -->
+                                <div x-show="item.type === 'agent_activity'" class="flex items-start gap-2 px-2 py-1 ml-4">
+                                    <span class="text-[10px] text-gray-600 w-14 flex-shrink-0" x-text="item.timestamp"></span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 flex-shrink-0" x-text="item.agent"></span>
+                                    <span class="text-[10px] flex-shrink-0"
+                                          :class="{
+                                              'text-yellow-500': item.action === 'thinking',
+                                              'text-blue-400': item.action === 'tool_call',
+                                              'text-green-400': item.action === 'result',
+                                          }"
+                                          x-text="item.action === 'thinking' ? '💭' : item.action === 'tool_call' ? '🔧' : '📤'">
+                                    </span>
+                                    <span class="text-xs text-gray-300 break-all" x-text="item.content"></span>
+                                </div>
+
+                                <!-- Pipeline Events -->
+                                <div x-show="item.type === 'pipeline_start'" class="flex items-center gap-2 px-2 py-2 bg-cyan-950/20 rounded border border-cyan-900/30">
+                                    <span class="text-cyan-400 text-sm">🚀</span>
+                                    <span class="text-xs text-cyan-300">Pipeline Started</span>
+                                    <span class="text-xs text-gray-500" x-text="'— ' + item.bug_description"></span>
+                                </div>
+
+                                <div x-show="item.type === 'pipeline_complete'" class="flex items-center gap-2 px-2 py-2 bg-green-950/20 rounded border border-green-900/30">
+                                    <span class="text-green-400 text-sm">✅</span>
+                                    <span class="text-xs text-green-300">Pipeline Completed</span>
+                                    <span class="text-xs text-gray-500">— Bug fixed, deployed to production</span>
+                                </div>
+
+                                <!-- Inner Loop Iteration -->
+                                <div x-show="item.type === 'inner_loop_iteration'" class="flex items-center gap-2 px-2 py-1 ml-4 bg-purple-950/20 rounded">
+                                    <span class="text-[10px] text-purple-400">⟳</span>
+                                    <span class="text-xs text-purple-300" x-text="'Iteration ' + item.iteration + '/' + item.max_iterations"></span>
+                                    <span class="text-xs" :class="item.tests_passed ? 'text-green-400' : 'text-red-400'"
+                                          x-text="item.tests_passed ? '✓ Converged' : '✕ Retry'"></span>
+                                </div>
+
+                                <!-- Canary -->
+                                <div x-show="item.type === 'canary_progress'" class="flex items-center gap-2 px-2 py-1 ml-4 bg-orange-950/20 rounded">
+                                    <span class="text-[10px] text-orange-400">🐤</span>
+                                    <span class="text-xs text-orange-300" x-text="'Canary ' + (item.metrics?.stage || '')"></span>
+                                    <span class="text-xs text-green-400" x-text="'→ ' + (item.metrics?.decision || '')"></span>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div x-show="activityLog.length === 0" class="flex items-center justify-center h-full text-gray-600 text-sm">
+                            点击「触发管道」开始演示
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Architecture Info -->
+        <div class="mt-4 bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <h2 class="text-sm font-semibold text-gray-400 mb-3">Architecture: Dual-Loop Convergence</h2>
+            <div class="grid grid-cols-2 gap-4 text-xs">
+                <div class="bg-purple-950/20 border border-purple-900/30 rounded p-3">
+                    <h3 class="text-purple-300 font-medium mb-1">Inner Loop — Correctness</h3>
+                    <p class="text-gray-400">TDD-Executor → Code-Reviewer → Sandbox Runner</p>
+                    <p class="text-gray-500 mt-1">退出条件: all_passed == True | 熔断: 3次迭代</p>
+                </div>
+                <div class="bg-orange-950/20 border border-orange-900/30 rounded p-3">
+                    <h3 class="text-orange-300 font-medium mb-1">Outer Loop — Availability</h3>
+                    <p class="text-gray-400">ReleaseController → SREGuard (5%→25%→50%→100%)</p>
+                    <p class="text-gray-500 mt-1">纯代码决策，毫秒级 | SLO 违规 → 自动回滚</p>
+                </div>
+            </div>
+            <div class="mt-3 text-[10px] text-gray-600">
+                Orchestrator 是确定性代码，所有非确定性封装在 LLM Agent 中 | 7 个熔断节点 | 状态持久化到 .devops_state/
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function pipeline() {
+    return {
+        // State
+        wsConnected: false,
+        ws: null,
+        bugInput: 'NullPointerException in PaymentService.processRefund() — 退款时原始交易为空',
+        running: false,
+        runs: {},
+        currentTraceId: null,
+        activityLog: [],
+        innerLoopData: [],
+        canaryData: [],
+        stageStatuses: {},
+        breakers: {
+            bug_recurrence: { failures: 0, max_failures: 3, state: 'closed' },
+            plan_review: { failures: 0, max_failures: 2, state: 'closed' },
+            code_reviewer: { failures: 0, max_failures: 2, state: 'closed' },
+            sandbox_runner: { failures: 0, max_failures: 2, state: 'closed' },
+            canary_5: { failures: 0, max_failures: 1, state: 'closed' },
+            canary_25: { failures: 0, max_failures: 1, state: 'closed' },
+            high_risk_change: { failures: 0, max_failures: 0, state: 'closed' },
+        },
+
+        stages: [
+            { id: 'bug_analysis', num: '1', name: 'Bug Analysis', desc: 'LLM 分析日志/代码', loop: null },
+            { id: 'bug_recurrence', num: '2', name: 'Bug Recurrence', desc: '沙箱复现验证', loop: null },
+            { id: 'test_driving', num: '3', name: 'Test Driving', desc: '编写红测试', loop: null },
+            { id: 'planning', num: '4', name: 'Planning', desc: '制定修复计划', loop: null },
+            { id: 'plan_review', num: '5', name: 'Plan Review', desc: '对抗性审查', loop: null },
+            { id: 'inner_loop', num: '6', name: 'Inner Loop', desc: 'TDD + Review + Sandbox', loop: 'inner' },
+            { id: 'pr_generation', num: '7', name: 'PR Generation', desc: 'Git 分支 + PR', loop: null },
+            { id: 'ci_build', num: '8', name: 'CI Build', desc: '构建 + OPA 策略', loop: null },
+            { id: 'outer_loop', num: '9', name: 'Outer Loop', desc: '金丝雀部署 + SRE', loop: 'outer' },
+        ],
+
+        init() {
+            this.connectWS();
+        },
+
+        connectWS() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            this.ws = new WebSocket(`${proto}//${location.host}/ws`);
+            this.ws.onopen = () => { this.wsConnected = true; };
+            this.ws.onclose = () => {
+                this.wsConnected = false;
+                setTimeout(() => this.connectWS(), 2000);
+            };
+            this.ws.onmessage = (e) => {
+                const event = JSON.parse(e.data);
+                this.handleEvent(event);
+            };
+            // Heartbeat
+            setInterval(() => {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send('ping');
+                }
+            }, 30000);
+        },
+
+        handleEvent(event) {
+            // For stage_update: replace the previous "running" entry when "completed" arrives
+            if (event.type === 'stage_update' && event.status === 'completed') {
+                const idx = this.activityLog.findIndex(
+                    e => e.type === 'stage_update' && e.stage === event.stage && e.status === 'running'
+                );
+                if (idx !== -1) {
+                    this.activityLog.splice(idx, 1);
+                }
+            }
+
+            this.activityLog.push(event);
+
+            // Auto-scroll
+            this.$nextTick(() => {
+                const feed = this.$refs.activityFeed;
+                if (feed) feed.scrollTop = feed.scrollHeight;
+            });
+
+            switch (event.type) {
+                case 'stage_update':
+                    this.stageStatuses[event.stage] = event.status;
+                    break;
+                case 'breaker_update':
+                    if (this.breakers[event.node]) {
+                        this.breakers[event.node].failures = event.failures;
+                        this.breakers[event.node].state = event.state;
+                    }
+                    break;
+                case 'inner_loop_iteration':
+                    this.innerLoopData.push(event);
+                    break;
+                case 'canary_progress':
+                    this.canaryData.push(event.metrics);
+                    break;
+                case 'pipeline_complete':
+                    this.running = false;
+                    break;
+            }
+        },
+
+        stageStatus(stageId) {
+            return this.stageStatuses[stageId] || 'pending';
+        },
+
+        async triggerPipeline() {
+            if (this.running || !this.bugInput.trim()) return;
+            this.running = true;
+            this.activityLog = [];
+            this.innerLoopData = [];
+            this.canaryData = [];
+            this.stageStatuses = {};
+            // Reset breakers display
+            Object.keys(this.breakers).forEach(k => {
+                this.breakers[k].failures = 0;
+                this.breakers[k].state = 'closed';
+            });
+
+            const resp = await fetch('/api/pipeline/trigger', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ description: this.bugInput }),
+            });
+            const data = await resp.json();
+            this.currentTraceId = data.trace_id;
+        },
+    };
+}
+</script>
+</body>
+</html>
