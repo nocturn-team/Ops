@@ -207,6 +207,30 @@ async def simulate_pipeline(trace_id: str, bug_description: str):
     await asyncio.sleep(1.0)
     await emit_agent("TDD-Executor", "result", "补丁: 在 processRefund() 第 45 行添加 null check")
 
+    await broadcast({
+        "type": "patch_diff",
+        "trace_id": trace_id,
+        "iteration": 1,
+        "file": "src/payment/service.py",
+        "diff": (
+            "@@ -42,8 +42,12 @@ class PaymentService:\n"
+            "     def process_refund(self, refund_request: RefundRequest) -> RefundResult:\n"
+            "         \"\"\"Process a refund for a completed transaction.\"\"\"\n"
+            "         original_txn = refund_request.get_original_transaction()\n"
+            "-        amount = original_txn.amount\n"
+            "-        refund_id = self._gateway.initiate_refund(original_txn.id, amount)\n"
+            "+        if original_txn is None:\n"
+            "+            raise InvalidRefundError(\n"
+            "+                f\"Original transaction not found for refund {refund_request.id}\"\n"
+            "+            )\n"
+            "+\n"
+            "+        amount = original_txn.amount\n"
+            "+        refund_id = self._gateway.initiate_refund(original_txn.id, amount)\n"
+            "         return RefundResult(refund_id=refund_id, status=\"pending\")\n"
+        ),
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+    })
+
     await emit_agent("CodeReviewer", "thinking", "审查补丁...")
     await asyncio.sleep(0.8)
     await emit_agent("CodeReviewer", "result", "⚠️ REQUEST_CHANGES — 建议添加日志记录")
@@ -230,6 +254,37 @@ async def simulate_pipeline(trace_id: str, bug_description: str):
     await emit_agent("TDD-Executor", "thinking", "修订补丁 (iteration 2)...")
     await asyncio.sleep(1.0)
     await emit_agent("TDD-Executor", "result", "补丁v2: 添加日志 + 修复边界条件")
+
+    await broadcast({
+        "type": "patch_diff",
+        "trace_id": trace_id,
+        "iteration": 2,
+        "file": "src/payment/service.py",
+        "diff": (
+            "@@ -42,12 +42,16 @@ class PaymentService:\n"
+            "     def process_refund(self, refund_request: RefundRequest) -> RefundResult:\n"
+            "         \"\"\"Process a refund for a completed transaction.\"\"\"\n"
+            "         original_txn = refund_request.get_original_transaction()\n"
+            "+\n"
+            "         if original_txn is None:\n"
+            "-            raise InvalidRefundError(\n"
+            "-                f\"Original transaction not found for refund {refund_request.id}\"\n"
+            "-            )\n"
+            "+            logger.warning(\n"
+            "+                \"Refund %s: original transaction is None, rejecting\",\n"
+            "+                refund_request.id,\n"
+            "+            )\n"
+            "+            return RefundResult(\n"
+            "+                refund_id=None, status=\"rejected\", reason=\"original_txn_missing\"\n"
+            "+            )\n"
+            " \n"
+            "         amount = original_txn.amount\n"
+            "+        logger.info(\"Processing refund %s for amount %s\", refund_request.id, amount)\n"
+            "         refund_id = self._gateway.initiate_refund(original_txn.id, amount)\n"
+            "         return RefundResult(refund_id=refund_id, status=\"pending\")\n"
+        ),
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+    })
 
     await emit_agent("CodeReviewer", "thinking", "审查补丁 v2...")
     await asyncio.sleep(0.8)

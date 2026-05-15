@@ -220,6 +220,24 @@
                                     <span class="text-xs text-orange-300" x-text="'Canary ' + (item.metrics?.stage || '')"></span>
                                     <span class="text-xs text-green-400" x-text="'→ ' + (item.metrics?.decision || '')"></span>
                                 </div>
+
+                                <!-- Patch Diff -->
+                                <div x-show="item.type === 'patch_diff'" class="ml-4 my-1 bg-gray-950 border border-gray-700 rounded overflow-hidden">
+                                    <div class="flex items-center justify-between px-3 py-1.5 bg-gray-800 border-b border-gray-700">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[10px] text-purple-400">📝 Patch</span>
+                                            <span class="text-[10px] text-gray-400 font-mono" x-text="item.file"></span>
+                                        </div>
+                                        <span class="text-[10px] text-gray-500" x-text="'iteration ' + item.iteration"></span>
+                                    </div>
+                                    <pre class="text-[11px] leading-4 overflow-x-auto p-0 m-0"><template x-for="(line, li) in (item.diff || '').split('\n')" :key="li"><div class="px-3 py-0"
+     :class="{
+         'bg-blue-950/40 text-blue-300': line.startsWith('@@'),
+         'bg-green-950/50 text-green-300': line.startsWith('+') && !line.startsWith('+++'),
+         'bg-red-950/50 text-red-300': line.startsWith('-') && !line.startsWith('---'),
+         'text-gray-400': !line.startsWith('+') && !line.startsWith('-') && !line.startsWith('@@'),
+     }" x-text="line"></div></template></pre>
+                                </div>
                             </div>
                         </template>
 
