@@ -3,7 +3,11 @@
 演示 9 阶段管道的完整运行过程：
   Bug分析 → 复现 → 红测试 → 规划 → 评审 → 内环TDD → PR → CI → 金丝雀部署
 
-运行: python -m demo.web.app
+运行:
+  python -m demo.web.app          (从项目根目录)
+  python demo/web/app.py          (从项目根目录)
+  cd demo/web && python app.py    (从子目录)
+
 访问: http://localhost:8000
 """
 
@@ -11,11 +15,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# 确保项目根目录在 sys.path 中，支持从任意目录运行
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
