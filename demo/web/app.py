@@ -15,45 +15,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
-import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-# 确保项目根目录在 sys.path 中，支持从任意目录运行
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-
-from libs.devops.circuit_breaker import CircuitBreaker
-from libs.devops.context import SharedContext
-from libs.devops.types import (
-    BugReport,
-    BuildResult,
-    CanaryMetrics,
-    CanaryStage,
-    CodeReviewResult,
-    EscalationRequest,
-    FixPlan,
-    Patch,
-    PipelineRun,
-    PipelineState,
-    PlanReviewResult,
-    PRInfo,
-    RedTest,
-    ReproductionResult,
-    ReviewVerdict,
-    RiskLevel,
-    RolloutDecision,
-    RolloutStatus,
-    SandboxResult,
-    Severity,
-)
 
 app = FastAPI(title="DevOps Agent Demo", version="1.0.0")
 
